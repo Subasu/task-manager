@@ -1,19 +1,32 @@
 const express = require('express')
 const User = require('../models/user')
-const router = new express.Router()
+const auth=require('../middleware/auth')
+const router = express()
 
 router.post('/users', async (req, res) => {
-    const user = new User(req.body)
-
     try {
+        const user = new User(req.body)
+        const token =await user.generateAuthToken()
         await user.save()
-        res.status(201).send(user)
+        res.status(201).send({user,token})
     } catch (e) {
         res.status(400).send(e)
     }
 })
 
-router.get('/users', async (req, res) => {
+router.post('/users/login',async (req,res)=>{
+    try{
+        const{email,password}=req.body
+        const user=await User.findByCredientiels(email,password)
+        const token=await user.generateAuthToken()
+        res.send({user,token})
+    }catch(e){
+        res.status(400).send(e)
+    }
+})
+
+router.get('/users',auth, async (req, res) => {
+    
     try {
         const users = await User.find({})
         res.send(users)
@@ -22,24 +35,25 @@ router.get('/users', async (req, res) => {
     }
 })
 
-router.get('/users/:id', async (req, res) => {
+router.get('/users/:id',auth, async (req, res) => {
     const _id = req.params.id
 
     try {
         const user = await User.findById(_id)
 
         if (!user) {
-            return res.status(404).send()
+            return res.status(404).send({error:"User Does not Exist"})
         }
 
         res.send(user)
     } catch (e) {
-        res.status(500).send()
+        res.status(500).send(e)
     }
 })
 
-router.patch('/users/:id', async (req, res) => {
+router.patch('/users/:id',auth, async (req, res) => {
     const updates = Object.keys(req.body)
+    // console.log(updates);
     const allowedUpdates = ['name', 'email', 'password', 'age']
     const isValidOperation = updates.every((update) => allowedUpdates.includes(update))
 
@@ -48,29 +62,31 @@ router.patch('/users/:id', async (req, res) => {
     }
 
     try {
-        const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
-
+        const user=await User.findById(req.params.id);
+        updates.forEach((update)=>user[update]=req.body[update]);
+        await user.save();
+        
         if (!user) {
-            return res.status(404).send()
+            return res.status(404).send({error:"User does not exist"})
         }
 
-        res.send(user)
+        res.send({message:"User Updated successfully",user})
     } catch (e) {
         res.status(400).send(e)
     }
 })
 
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id',auth, async (req, res) => {
     try {
         const user = await User.findByIdAndDelete(req.params.id)
 
         if (!user) {
-            return res.status(404).send()
+            return res.status(404).send({error:"User does not exist"})
         }
 
-        res.send(user)
+        res.send({message:'deleted successfully',user})
     } catch (e) {
-        res.status(500).send()
+        res.status(500).send(e)
     }
 })
 
